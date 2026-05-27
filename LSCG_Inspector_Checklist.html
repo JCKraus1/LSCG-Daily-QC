@@ -1468,7 +1468,7 @@ function tick(){
   const pics=app.jobs.reduce((s,j)=>s+SECTIONS.reduce((s2,sec)=>s2+(j.sd[sec.id]?.photos.length||0),0),0);
   const secs=app.jobs.reduce((s,j)=>s+SECTIONS.filter(sec=>j.sd[sec.id]?.saved).length,0);
   const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-  setText('ticker',`${jobs} JOB${jobs!==1?'S':''} OPEN  ·  ${secs} SECTIONS COMPLETE  ·  ${pics} PHOTOS  ·  SAVED ${t}`);
+  setText('ticker',`${jobs} JOB${jobs!==1?'S':''} OPEN · ${secs} SECTIONS COMPLETE · ${pics} PHOTOS · SAVED ${t}`);
 }
 
 // Keyboard support for checklist items
