@@ -1447,7 +1447,17 @@ async function doSubmit(){
         sectionId:s.id, sectionTitle:s.title, savedAt:sd?.savedAt||null,
         notes:sd?.notes||'', photoCount:sd?.photos.length||0,
         checklist:s.items.map((item,i)=>({item,checked:sd?sd.checks[i]:false})),
-        photos:(sd?.photos||[]).map(p=>({filename:p.name, data:p.data, type:p.type}))
+        photos: (sd?.photos || []).map(p => ({
+  filename: p.name,
+  originalFileName: p.name,
+  displayName: p.name,
+  name: p.name,
+  createdDateTime: p.lastModified
+    ? new Date(p.lastModified).toISOString()
+    : new Date().toISOString(),
+  data: p.data,
+  type: p.type
+}))
       };
     })
   };
