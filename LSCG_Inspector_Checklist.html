@@ -631,7 +631,24 @@ body::after {
 .btn-save.saved {
   background: var(--green-mid); color: var(--green-txt);
   border-color: var(--green-bdr); cursor: default;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
 }
+.unlock-btn {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  background: rgba(255,255,255,0.5); border: 1px solid var(--green-bdr);
+  border-radius: 6px; padding: 2px 8px; cursor: pointer;
+  color: var(--green-txt); white-space: nowrap;
+  transition: background 0.15s;
+}
+.unlock-btn:hover { background: rgba(255,255,255,0.85); }
+.opt-pill {
+  display: inline-block; font-size: 9px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  background: #FEF3C7; color: #92400E;
+  border: 1px solid #FCD34D; border-radius: 4px;
+  padding: 1px 5px; margin-left: 6px; vertical-align: middle;
+}
+.check-row.is-optional .check-label { color: var(--text-muted); }
 
 /* ── Submit Panel ── */
 .submit-panel {
@@ -920,7 +937,7 @@ body::after {
     <input type="hidden" id="webhookUrl" value="https://default8775b04bce9146ddb23ce67b14b3cf.d4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/de5502aed66d4646a12c886f2bd3a5e9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=S3bn8O4w6Tlg_OITS7tJSm1ic6FFuEVWG7yH8EDRAiE"/>
 
     <div class="m-alert" id="mAlert"></div>
-    <button class="btn-modal-go" id="btnGo" onclick="doSubmit()">▶ Submit to SharePoint</button>
+    <button class="btn-modal-go" id="btnGo" onclick="doSubmit()">▶ Submit Inspection Form</button>
   </div>
 </div>
 
@@ -939,19 +956,19 @@ const SECTIONS = [
     id:'midday', label:'Midday', time:'12:00 PM', icon:'☀️',
     colorHex:'#D97706', title:'Midday Requirements', subtitle:'12:00 PM Check',
     items:['Complete first redline','Mid-day safety check','Trace wire confirmed',
-      'Two-way access checked','Toby boxes verified','Send first redline to Supervisor']
+      '[optional] Two-way access checked','[optional] Toby boxes verified','Send first redline to Supervisor']
   },
   {
     id:'walkwheel', label:'Walk Wheel', time:'AS NEEDED', icon:'📏',
     colorHex:'#16A34A', title:'Walk Wheel Protocol', subtitle:'Measurement & DAP Documentation',
-    items:['Photo of wheel at 0 (start)','Photo at end measurement','Document all DAP locations']
+    items:['Photo of wheel at 0 (start)','Photo at end measurement','[optional] Document all DAP locations']
   },
   {
     id:'endofday', label:'End of Day', time:'EOD', icon:'🌆',
     colorHex:'#7C3AED', title:'End of Day Procedures', subtitle:'Final Closeout Checklist',
     items:['Final documentation completed','Site properly cleaned',
       'All restoration requirements met','Issues reported to manager',
-      'DAP placement verified','ABF splice verified','Upload all photos & documentation']
+      '[optional] DAP placement verified','[optional] ABF splice verified','Upload all photos & documentation']
   }
 ];
 
@@ -1103,11 +1120,14 @@ function panelHTML(job){
 }
 
 function secHTML(jid,s){
-  const items=s.items.map((item,i)=>`
-    <div class="check-row" id="cr_${jid}_${s.id}_${i}" onclick="chk('${jid}','${s.id}',${i})" role="checkbox" aria-checked="false" tabindex="0">
+  const items=s.items.map((item,i)=>{
+    const isOpt=item.startsWith('[optional] ');
+    const label=isOpt?item.slice(11):item;
+    return `
+    <div class="check-row${isOpt?' is-optional':''}" id="cr_${jid}_${s.id}_${i}" onclick="chk('${jid}','${s.id}',${i})" role="checkbox" aria-checked="false" tabindex="0">
       <div class="check-box"><span class="check-tick">✓</span></div>
-      <span class="check-label">${esc(item)}</span>
-    </div>`).join('');
+      <span class="check-label">${esc(label)}${isOpt?' <span class=\'opt-pill\'>Optional</span>':''}</span>
+    </div>`;}).join('');
   return `
     <div class="section-card" id="sc_${jid}_${s.id}">
       <div class="sec-trigger" onclick="toggleSec('${jid}','${s.id}')" role="button" aria-expanded="false" tabindex="0">
@@ -1118,7 +1138,7 @@ function secHTML(jid,s){
           <div class="sec-time">${esc(s.time)} · ${esc(s.subtitle)}</div>
         </div>
         <div class="sec-right">
-          <span class="sec-badge" id="sb_${jid}_${s.id}">0/${s.items.length}</span>
+          <span class="sec-badge" id="sb_${jid}_${s.id}">0/${s.items.filter(x=>!x.startsWith('[optional] ')).length}</span>
           <span class="sec-chev" id="sv_${jid}_${s.id}">▼</span>
         </div>
       </div>
@@ -1168,8 +1188,10 @@ function sync(job){
   let saved=0, totalPics=0;
   SECTIONS.forEach((s,si)=>{
     const sd=job.sd[s.id]; if(!sd) return;
-    const chked=sd.checks.filter(Boolean).length;
-    const all=chked===s.items.length;
+    const reqIdxs=s.items.map((item,i)=>item.startsWith('[optional] ')?-1:i).filter(i=>i>=0);
+    const chked=reqIdxs.filter(i=>sd.checks[i]).length;
+    const totalChked=sd.checks.filter(Boolean).length;
+    const all=chked===reqIdxs.length;
     if(sd.saved) saved++;
     totalPics+=sd.photos.length;
 
@@ -1177,7 +1199,7 @@ function sync(job){
     if(card) card.className='section-card'+(sd.saved?' is-done':'')+(job.openSec===s.id?' is-open':'');
 
     const badge=document.getElementById('sb_'+id+'_'+s.id);
-    if(badge){ badge.className='sec-badge'+(sd.saved?' is-done':''); badge.textContent=sd.saved?('✓ '+sd.savedAt):(chked+'/'+s.items.length); }
+    if(badge){ badge.className='sec-badge'+(sd.saved?' is-done':''); badge.textContent=sd.saved?('✓ '+sd.savedAt):(chked+'/'+reqIdxs.length); }
 
     const chev=document.getElementById('sv_'+id+'_'+s.id);
     if(chev) chev.className='sec-chev'+(job.openSec===s.id?' open':'');
@@ -1204,9 +1226,9 @@ function sync(job){
 
     const btn=document.getElementById('bsv_'+id+'_'+s.id);
     if(btn){
-      if(sd.saved){ btn.className='btn-save saved'; btn.textContent='✓ Saved at '+sd.savedAt; btn.disabled=true; }
+      if(sd.saved){ btn.className='btn-save saved'; btn.innerHTML='✓ Saved at '+sd.savedAt+' &nbsp;<span class="unlock-btn" onclick="unlockSec(event,\''+id+'\',\''+s.id+'\')" title="Unlock to edit">🔓 Unlock</span>'; btn.disabled=false; }
       else if(all){ btn.className='btn-save ready'; btn.textContent='▶ Save & Lock Section'; btn.disabled=false; }
-      else{ const r=s.items.length-chked; btn.className='btn-save'; btn.textContent=r+' item'+(r!==1?'s':'')+' remaining'; btn.disabled=true; }
+      else{ const r=reqIdxs.length-chked; btn.className='btn-save'; btn.textContent=r+' item'+(r!==1?'s':'')+' remaining'; btn.disabled=true; }
     }
 
     const pips=document.getElementById('pips_'+id);
@@ -1224,7 +1246,7 @@ function sync(job){
       sub.innerHTML=`<div class="sp-ready">
         <div class="sp-ready-title">✓ Checklist Complete</div>
         <div class="sp-ready-sub">// ${totalPics} PHOTOS ATTACHED · READY TO SUBMIT</div>
-        <button class="btn-transmit" onclick="openModal('${id}')">▶ Submit to SharePoint</button>
+        <button class="btn-transmit" onclick="openModal('${id}')">▶ Submit Inspection Form</button>
       </div>`;
     } else {
       sub.innerHTML=`<div class="sp-waiting">
@@ -1290,10 +1312,19 @@ function onNote(jid,sid,val){
   job.sd[sid].notes=val; save();
 }
 
+function unlockSec(e,jid,sid){
+  e.stopPropagation();
+  const job=app.jobs.find(j=>j.id===jid); if(!job) return;
+  if(!confirm('Unlock this section to make changes? It will need to be saved again.')) return;
+  job.sd[sid].saved=false; job.sd[sid].savedAt=null;
+  save(); sync(job); renderTabs(); tick();
+}
+
 function saveSec(jid,sid){
   const job=app.jobs.find(j=>j.id===jid); if(!job) return;
   const s=SECTIONS.find(x=>x.id===sid); const sd=job.sd[sid];
-  if(!s||!sd||!s.items.every((_,i)=>sd.checks[i])) return;
+  const reqI=s.items.map((item,i)=>item.startsWith('[optional] ')?-1:i).filter(i=>i>=0);
+  if(!s||!sd||!reqI.every(i=>sd.checks[i])) return;
   sd.saved=true; sd.savedAt=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const idx=SECTIONS.findIndex(x=>x.id===sid);
   if(idx<SECTIONS.length-1) job.openSec=SECTIONS[idx+1].id;
@@ -1385,7 +1416,7 @@ function openModal(jid){
 
   const al=document.getElementById('mAlert'); al.className='m-alert'; al.textContent='';
   const btn=document.getElementById('btnGo');
-  btn.textContent='▶ Submit to SharePoint'; btn.style.background=''; btn.disabled=false; btn.onclick=doSubmit;
+  btn.textContent='▶ Submit Inspection Form'; btn.style.background=''; btn.disabled=false; btn.onclick=doSubmit;
   document.getElementById('modal').classList.add('open');
   document.body.style.overflow='hidden';
 }
